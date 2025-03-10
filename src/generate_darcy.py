@@ -43,6 +43,7 @@ def setup_system(G, N, alpha):
         
         # Interior nodes use standard 5-point stencil
         if 0 < i < N-1 and 0 < j < N-1:
+
             A[idx, idx] = -4 * mu_node / h**2
             
             east = (i+1, j)
@@ -82,13 +83,14 @@ def setup_system(G, N, alpha):
             # Add Neumann flux to RHS
             b[idx] = -alpha
             
-        elif i == 0 or j == 0 or j == N-1:  
+        elif (i == 0 or j == 0 or j == N-1):  
             if i == 0 and j == 0:  # Fix phi(0,0) = 0 to remove singularity
                 A[idx, idx] = 1
                 b[idx] = 0
                 continue
                 
             # Set up boundary conditions with homogeneous Neumann
+
             A[idx, idx] = -3 * mu_node / h**2
             
             # Handle neighbors based on which boundary we're on
@@ -96,8 +98,9 @@ def setup_system(G, N, alpha):
             for neighbor in neighbors:
                 n_idx = node_to_idx[neighbor]
                 mu_avg = 0.5 * (mu_node + G.nodes[neighbor]['mu'])
-                A[idx, n_idx] = mu_avg / h**2
+                A[idx, n_idx] = mu_avg / h**2 
     
+
     return A.tocsr(), b, node_to_idx
 
 def solve_darcy_flow(N=101, alpha=0.1, a=0.25):
@@ -119,7 +122,9 @@ def solve_darcy_flow(N=101, alpha=0.1, a=0.25):
     
     # Set up and solve linear system
     A, b, node_to_idx = setup_system(G, N, alpha)
+
     phi = spsolve(A, b)
+    phi+=0.55
     
     # Store solution on graph
     for node in G.nodes():
@@ -236,7 +241,7 @@ def plot_velocity_field(phi_grid, G, N, alpha, a):
     plt.colorbar(contour, label='Pressure φ')
     
     # Use a reduced set of points for clarity
-    skip = min(1, N // 20)
+    skip = max(1, N // 5)
     plt.quiver(X[::skip, ::skip], Y[::skip, ::skip], 
                F_x[::skip, ::skip].T, F_y[::skip, ::skip].T,
                color='white', scale=20)
@@ -254,12 +259,13 @@ def plot_velocity_field(phi_grid, G, N, alpha, a):
 
 if __name__ == "__main__":
     # Parameter settings
-    N = 50  # Grid size (N x N)
+    N = 20  # Grid size (N x N)
     alpha = 1  # Material property inside the cylinder
-    a = 0.25  # Radius of the cylinder
+    a = 0.2  # Radius of the cylinder
     
     # Solve the PDE
     G, phi_grid, pos = solve_darcy_flow(N=N, alpha=alpha, a=a)
+    print(phi_grid)
     
     # Plot solution
     plt_solution = plot_solution(G, phi_grid, pos, N, alpha, a)
