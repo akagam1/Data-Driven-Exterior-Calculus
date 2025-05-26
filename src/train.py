@@ -54,103 +54,90 @@ def set_boundary_conditions(G, f, problem_type='D1', alpha=1.0):
         #check if indexing is being done correctly
         pos = G.nodes[node]['pos']
         if abs(pos[0]) < 1e-10:
-            print(f"Node {i} is on the left boundary with value")
             f[i] = 1 if problem_type == 'D1' else alpha
         elif abs(pos[0] - 1.0) < 1e-10:
-            print(f"Node {i} is on the right boundary with value")
             f[i] = 0
     return f
 
+def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_type, lr):
+    #a = 0.2
 
-N = 8
-alpha = 1
-a = 0.2
-
-G = darcy_mod.create_darcy_dataset(n=N, problem_type='D1')
-node_phi = nx.get_node_attributes(G, 'phi')
-phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
+    G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type)
+    node_phi = nx.get_node_attributes(G, 'phi')
+    phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
 
 
-d0 = ddec.cobound_d0(G)
-d1 = ddec.cobound_d1(G)
-phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
-print(phi_faces)
+    d0 = ddec.cobound_d0(G)
+    d1 = ddec.cobound_d1(G)
+    phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
+
+    f = torch.zeros((N*N,), dtype=torch.float64)
+    f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alpha)
+    f_n = ddec.convert_cochain(f_n, N, degree=2)
+
+    bcs = []
+    # for i in range(f_n.shape[0]):
+    #     if f_n[i] != 0:
+    #         bcs.append((i, f_n[i]))
+    f = f_n.clone().detach().requires_grad_(True)
 
 
-f = torch.zeros((N*N,), dtype=torch.float64)
-f_n = set_boundary_conditions(G, f, problem_type='D1', alpha=alpha)
-f_n = ddec.convert_cochain(f_n, N, degree=2)
+    properties = {'d0': d0, 'd1': d1, 'f': f}
 
-bcs = []
-# for i in range(f_n.shape[0]):
-#     if f_n[i] != 0:
-#         bcs.append((i, f_n[i]))
-f = f_n.clone().detach().requires_grad_(True)
+    model = DDECModel(iter, tol, epsilon, in_dim, out_dim, properties)
+    model.bcs = bcs
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-
-properties = {'d0': d0, 'd1': d1, 'f': f}
+    criterion = torch.nn.MSELoss()
+    model.phi_faces = phi_faces
 
 
-iter = 20000
-tol = 1e-12
-epsilon = 0
-in_dim = 0
-out_dim = 0
+    losses = []
+    epochs = 10000
+    k = d1 @ d0
+    def make_u(N):
+        u = abs(torch.randn((N-1)*(N-1), dtype=torch.float64, requires_grad=True))
+        for i in range(u.shape[0]):
+            if (u[i] >= 0):
+                u[i] = min(0.75, u[i])
+            else:
+                u[i] = max(0, u[i])
+        return u
 
+    u = make_u(N)
 
+    with tqdm(total= epochs, desc="Training", unit="epoch") as pbar:
+        for epoch in range(epochs):
+            optimizer.zero_grad()
+            with torch.enable_grad():
+                u_det = u.detach().requires_grad_(True)
+                u_it = model(u_det, f)
 
-model = DDECModel(iter, tol, epsilon, in_dim, out_dim, properties)
-model.bcs = bcs
-optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
+                l = model.adj_loss
 
-criterion = torch.nn.MSELoss()
-model.phi_faces = phi_faces
+                loss = criterion(u_it, phi_faces) + l
+                loss.backward(retain_graph=True)
 
+            optimizer.step()
+            losses.append(loss.item())
 
-losses = []
-epochs = 10000
-k = d1 @ d0
-def make_u(N):
-    u = abs(torch.randn((N-1)*(N-1), dtype=torch.float64, requires_grad=True))
-    for i in range(u.shape[0]):
-        if (u[i] >= 0):
-            u[i] = min(0.75, u[i])
-        else:
-            u[i] = max(0, u[i])
-    return u
+            pbar.set_postfix({'Loss': f'{loss.item():.10f}'})
+            pbar.update(1)
 
-u = make_u(N)
+    u_est = model.forward(u, f) 
 
-with tqdm(total= epochs, desc="Training", unit="epoch") as pbar:
-    for epoch in range(epochs):
-        optimizer.zero_grad()
-        with torch.enable_grad():
-            u_det = u.detach().requires_grad_(True)
-            u_it = model(u_det, f)
+    plt.figure(figsize=(10, 6))
+    plt.plot(phi_faces.detach().numpy(), label="phi_faces", linestyle='-', marker='o')
+    plt.plot(u_est.detach().numpy(), label="u_est", linestyle='--', marker='s')
 
-            l = model.adj_loss
+    # Labels and title
+    plt.xlabel("Index")
+    plt.ylabel("Value")
+    plt.title("Comparison of phi_faces and u_est")
+    plt.legend()
+    plt.grid()
 
-            loss = criterion(u_it, phi_faces) + l
-            loss.backward(retain_graph=True)
-
-        optimizer.step()
-        losses.append(loss.item())
-
-        pbar.set_postfix({'Loss': f'{loss.item():.10f}'})
-        pbar.update(1)
-
-u_est = model.forward(u, f) 
-
-plt.figure(figsize=(10, 6))
-plt.plot(phi_faces.detach().numpy(), label="phi_faces", linestyle='-', marker='o')
-plt.plot(u_est.detach().numpy(), label="u_est", linestyle='--', marker='s')
-
-# Labels and title
-plt.xlabel("Index")
-plt.ylabel("Value")
-plt.title("Comparison of phi_faces and u_est")
-plt.legend()
-plt.grid()
-
-# Show plot
-plt.show()
+    # Show plot
+    plt.show()
+    
+#train_main(N=8, alpha=1, iter=20000, tol=1e-12, epsilon=0, in_dim=0, out_dim=0, epochs=10000)
