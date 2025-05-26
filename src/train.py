@@ -82,14 +82,13 @@ f_n = set_boundary_conditions(G, f, problem_type='D1', alpha=alpha)
 f_n = ddec.convert_cochain(f_n, N, degree=2)
 
 bcs = []
-for i in range(f_n.shape[0]):
-    if f_n[i] != 0:
-        bcs.append((i, f_n[i]))
+# for i in range(f_n.shape[0]):
+#     if f_n[i] != 0:
+#         bcs.append((i, f_n[i]))
 f = f_n.clone().detach().requires_grad_(True)
 
 
 properties = {'d0': d0, 'd1': d1, 'f': f}
-
 
 
 iter = 20000

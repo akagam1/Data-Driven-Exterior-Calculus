@@ -62,28 +62,26 @@ class DDECModel(nn.Module):
         u_new = self.forward_problem(u, K, f)
         return u_new
 
-    def forward_problem(self, u, K_stable, f):
+    def forward_problem(self, u, K, f):
         u_n = u.clone().detach().requires_grad_(True)
         
-        residual = 2
         iteration = 1
 
-        K_bc, f_bc = self.apply_bcs(K_stable, f)
+        #K_bc, f_bc = self.apply_bcs(K, f)
+    
         if (iteration == 1):
-            u_n = torch.linalg.solve(K_bc, f_bc)
+            u_n = torch.linalg.solve(K, f)
             iteration += 1
         if (iteration > 1):
             for i in range(self.iter):
-                residual_vec = K_bc @ u_n - f_bc
+                residual_vec = K @ u_n - f
                 residual_norm = torch.linalg.norm(residual_vec, ord=2).item()
                 if residual_norm < self.tol:
-                    #print(f"Converged in {i} iterations with residual norm {residual_norm}")
                     break
-                du = torch.linalg.solve(K_bc, residual_vec)
+                du = torch.linalg.solve(K, residual_vec)
                 u_n = u_n - du
-            #print(f"Residual norm after {self.iter} iterations: {residual_norm}")
-        self.lambda_adj = self.adj_problem(u_n, K_bc)
-        self.adj_loss = self.lambda_adj.T @ (K_bc @ u_n - f_bc)
+        self.lambda_adj = self.adj_problem(u_n, K)
+        self.adj_loss = self.lambda_adj.T @ (K @ u_n - f)
 
         return u_n
 
