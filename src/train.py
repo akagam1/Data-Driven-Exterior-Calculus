@@ -61,31 +61,46 @@ def set_boundary_conditions(G, f, problem_type='D1', alpha=1.0):
 
 def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_type, lr):
     #a = 0.2
+    batches = []
+    if problem_type == 'D1':
+        G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type)
+        node_phi = nx.get_node_attributes(G, 'phi')
+        phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
 
-    G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type)
-    node_phi = nx.get_node_attributes(G, 'phi')
-    phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
+
+        d0 = ddec.cobound_d0(G)
+        d1 = ddec.cobound_d1(G)
+        phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
+
+        f = torch.zeros((N*N,), dtype=torch.float64)
+        f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alpha)
+        f_n = ddec.convert_cochain(f_n, N, degree=2)
+
+        f = f_n.clone().detach().requires_grad_(True)
+        batches = [(f, phi_faces)]
+
+    if problem_type == 'D2':
+        for alph in [1,2,4]:
+            G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type, alphas=[alph])
+            node_phi = nx.get_node_attributes(G, 'phi')
+            phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
 
 
-    d0 = ddec.cobound_d0(G)
-    d1 = ddec.cobound_d1(G)
-    phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
+            d0 = ddec.cobound_d0(G)
+            d1 = ddec.cobound_d1(G)
+            phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
 
-    f = torch.zeros((N*N,), dtype=torch.float64)
-    f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alpha)
-    f_n = ddec.convert_cochain(f_n, N, degree=2)
+            f = torch.zeros((N*N,), dtype=torch.float64)
+            f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alpha)
+            f_n = ddec.convert_cochain(f_n, N, degree=2)
 
-    bcs = []
-    # for i in range(f_n.shape[0]):
-    #     if f_n[i] != 0:
-    #         bcs.append((i, f_n[i]))
-    f = f_n.clone().detach().requires_grad_(True)
+            f = f_n.clone().detach().requires_grad_(True)
+            batches.append((f, phi_faces))
 
 
     properties = {'d0': d0, 'd1': d1, 'f': f}
 
     model = DDECModel(iter, tol, epsilon, in_dim, out_dim, properties)
-    model.bcs = bcs
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     criterion = torch.nn.MSELoss()
@@ -93,7 +108,7 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
 
 
     losses = []
-    epochs = 10000
+    epochs = epochs
     k = d1 @ d0
     def make_u(N):
         u = abs(torch.randn((N-1)*(N-1), dtype=torch.float64, requires_grad=True))
@@ -108,22 +123,30 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
 
     with tqdm(total= epochs, desc="Training", unit="epoch") as pbar:
         for epoch in range(epochs):
-            optimizer.zero_grad()
-            with torch.enable_grad():
-                u_det = u.detach().requires_grad_(True)
-                u_it = model(u_det, f)
+            for X in batches:
+                f, phi_faces = X
+                optimizer.zero_grad()
+                with torch.enable_grad():
+                    u_det = u.detach().requires_grad_(True)
+                    u_it = model(u_det, f)
 
-                l = model.adj_loss
+                    l = model.adj_loss
 
-                loss = criterion(u_it, phi_faces) + l
-                loss.backward(retain_graph=True)
+                    loss = criterion(u_it, phi_faces) + l
+                    loss.backward(retain_graph=True)
 
-            optimizer.step()
-            losses.append(loss.item())
+                optimizer.step()
+                losses.append(loss.item())
 
             pbar.set_postfix({'Loss': f'{loss.item():.10f}'})
             pbar.update(1)
 
+            if (loss.item() < 1e-10):
+                print(f"Converged at epoch {epoch} with loss {loss.item()}")
+                break
+
+    if (len(batches) > 1):
+        f,phi_faces = batches[2]
     u_est = model.forward(u, f) 
 
     plt.figure(figsize=(10, 6))

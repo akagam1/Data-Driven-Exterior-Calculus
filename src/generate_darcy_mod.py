@@ -97,11 +97,9 @@ def create_darcy_dataset(n=50, problem_type='D1', alphas=None):
     for alpha in alphas:
         G = create_grid_graph(n)
         G = solve_darcy_problem(G, problem_type, alpha)
-        # plot_solution_with_circle(G, f"{problem_type} with α={alpha}")
+    
+
     return G
 
-
-# Example usage
-# n=6
-# create_darcy_dataset(n=n, problem_type='D1')
-# # create_darcy_dataset(n=50, problem_type='D2')
+# G = create_darcy_dataset(n=50, problem_type='D2', alphas=[2.0])
+# plot_solution_with_circle(G, title=f'Darcy Flow Solution (α=2.0)', radius=0.25)

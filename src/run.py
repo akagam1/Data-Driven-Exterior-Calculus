@@ -1,6 +1,4 @@
 import argparse
-import sys
-import os
 from train import train_main
 
 parser = argparse.ArgumentParser(description="Run the PDE constrained optimization for specific problem types.")
