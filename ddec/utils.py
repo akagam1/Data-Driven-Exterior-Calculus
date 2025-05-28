@@ -3,9 +3,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import generate_darcy_mod as darcy_mod
 import DDEC as ddec
-from DDEC_Net import DDECModel
 import torch
-from tqdm import tqdm
 
 def plot_solution(model_out, N, alpha, a):
     """Plot the solution"""
@@ -17,11 +15,9 @@ def plot_solution(model_out, N, alpha, a):
     y = np.linspace(-0.5, 0.5, N)
     X, Y = np.meshgrid(x, y)
     
-    # Create contour plot
     contour = plt.contourf(X, Y, model_out.T, 20, cmap='viridis')
     plt.colorbar(contour, label='Pressure φ')
     
-    # Draw the circle representing the inclusion
     circle = plt.Circle((0, 0), a, fill=False, color='r', linewidth=2)
     plt.gca().add_patch(circle)
 
@@ -51,7 +47,6 @@ def set_boundary_conditions(G, f, problem_type='D1', alpha=1.0):
     node_to_idx = {node: i for i, node in enumerate(G.nodes())}
     for node in G.nodes():
         i = node_to_idx[node]
-        #check if indexing is being done correctly
         pos = G.nodes[node]['pos']
         if abs(pos[0]) < 1e-10:
             f[i] = 1 if problem_type == 'D1' else alpha
@@ -59,8 +54,7 @@ def set_boundary_conditions(G, f, problem_type='D1', alpha=1.0):
             f[i] = 0
     return f
 
-def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_type, lr):
-    #a = 0.2
+def dataset_generation(N, problem_type='D1',alpha=1.0):
     batches = []
     if problem_type == 'D1':
         G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type)
@@ -80,11 +74,10 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
         batches = [(f, phi_faces)]
 
     if problem_type == 'D2':
-        for alph in [1,2,4]:
+        for alph in [2,3,4]:
             G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type, alphas=[alph])
             node_phi = nx.get_node_attributes(G, 'phi')
             phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
-
 
             d0 = ddec.cobound_d0(G)
             d1 = ddec.cobound_d1(G)
@@ -96,71 +89,14 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
 
             f = f_n.clone().detach().requires_grad_(True)
             batches.append((f, phi_faces))
-
-
-    properties = {'d0': d0, 'd1': d1, 'f': f}
-
-    model = DDECModel(iter, tol, epsilon, in_dim, out_dim, properties)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-    criterion = torch.nn.MSELoss()
-    model.phi_faces = phi_faces
-
-
-    losses = []
-    epochs = epochs
-    k = d1 @ d0
-    def make_u(N):
-        u = abs(torch.randn((N-1)*(N-1), dtype=torch.float64, requires_grad=True))
-        for i in range(u.shape[0]):
-            if (u[i] >= 0):
-                u[i] = min(0.75, u[i])
-            else:
-                u[i] = max(0, u[i])
-        return u
-
-    u = make_u(N)
-
-    with tqdm(total= epochs, desc="Training", unit="epoch") as pbar:
-        for epoch in range(epochs):
-            for X in batches:
-                f, phi_faces = X
-                optimizer.zero_grad()
-                with torch.enable_grad():
-                    u_det = u.detach().requires_grad_(True)
-                    u_it = model(u_det, f)
-
-                    l = model.adj_loss
-
-                    loss = criterion(u_it, phi_faces) + l
-                    loss.backward(retain_graph=True)
-
-                optimizer.step()
-                losses.append(loss.item())
-
-            pbar.set_postfix({'Loss': f'{loss.item():.10f}'})
-            pbar.update(1)
-
-            if (loss.item() < 1e-10):
-                print(f"Converged at epoch {epoch} with loss {loss.item()}")
-                break
-
-    if (len(batches) > 1):
-        f,phi_faces = batches[2]
-    u_est = model.forward(u, f) 
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(phi_faces.detach().numpy(), label="phi_faces", linestyle='-', marker='o')
-    plt.plot(u_est.detach().numpy(), label="u_est", linestyle='--', marker='s')
-
-    # Labels and title
-    plt.xlabel("Index")
-    plt.ylabel("Value")
-    plt.title("Comparison of phi_faces and u_est")
-    plt.legend()
-    plt.grid()
-
-    # Show plot
-    plt.show()
     
-#train_main(N=8, alpha=1, iter=20000, tol=1e-12, epsilon=0, in_dim=0, out_dim=0, epochs=10000)
+    return batches, d0, d1
+
+def make_u(N):
+    u = abs(torch.randn((N-1)*(N-1), dtype=torch.float64, requires_grad=True))
+    for i in range(u.shape[0]):
+        if (u[i] >= 0):
+            u[i] = min(0.75, u[i])
+        else:
+            u[i] = max(0, u[i])
+    return u

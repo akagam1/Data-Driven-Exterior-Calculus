@@ -17,11 +17,14 @@ class DDECModel(nn.Module):
         self.phi_faces = []
         self.GRAD_s = None
         self.DIV = None
+        self.f = None
 
         if self.epsilon > 0:
             hidden_dim = 5 
             self.nn_model = nn.Sequential(
                 nn.Linear(1, hidden_dim),
+                nn.Tanh(),
+                nn.Linear(hidden_dim, hidden_dim),
                 nn.Tanh(),
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.Tanh(),
@@ -31,7 +34,6 @@ class DDECModel(nn.Module):
 
         self.d1 = properties['d1']
         self.d0 = properties['d0']
-        self.f = properties['f']
         self.device = self.d1.device
 
         self.B1_vals = nn.Parameter(torch.randn(self.d1.shape[1]))
@@ -40,10 +42,6 @@ class DDECModel(nn.Module):
         self.D2_vals = nn.Parameter(torch.randn(self.d1.shape[0]))
     
     def _init_nn(self):
-        """
-        He Initialization for hidden layers
-        Initialize final layer to zero
-        """
         for layer in self.nn_model:
             if isinstance(layer, nn.Linear):
                 if layer.out_features == self.out_dim:
@@ -54,18 +52,6 @@ class DDECModel(nn.Module):
                     if layer.bias is not None:
                         init.zeros_(layer.bias)
 
-    
-    def apply_bcs(self, J, rhs):
-        J_bc = J.clone()
-        rhs_bc = rhs.clone()
-        
-        for bc in self.bcs:
-            idx, val = bc
-            J_bc[idx, :] = 0
-            J_bc[idx, idx] = 1
-            rhs_bc[idx] = val
-
-        return J_bc, rhs_bc
     
     def compute_hodge_laplacian(self):
         B1 = torch.diag(self.B1_vals**2 + 1e-5 * torch.ones_like(self.B1_vals)).to(dtype=torch.float64)
@@ -85,9 +71,12 @@ class DDECModel(nn.Module):
 
     def forward(self, u, f):
         K = self.compute_hodge_laplacian()
+        self.f = f
         u_new = self.forward_problem(u, K, f)
         return u_new
     
+    def _transpose(self, x):
+        return x.permute(*torch.arange(x.ndim - 1, -1, -1))
     
     def forward_problem(self, u, K, f):
         def operator(u):
@@ -96,7 +85,7 @@ class DDECModel(nn.Module):
             div_nn_val = self.DIV @ nn_val
             Ku = K@u + self.epsilon * div_nn_val
 
-            return Ku
+            return Ku - f
         
         u_n = u.clone().detach().requires_grad_(True)
 
@@ -127,7 +116,7 @@ class DDECModel(nn.Module):
             J = K
 
         self.lambda_adj = self.adj_problem(u_n, J)
-        self.adj_loss = self.lambda_adj.T @ (Ku - f)
+        self.adj_loss = self._transpose(self.lambda_adj) @ (Ku - f)
 
         return u_n
 

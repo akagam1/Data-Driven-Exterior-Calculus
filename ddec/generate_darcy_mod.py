@@ -70,27 +70,6 @@ def solve_darcy_problem(G, problem_type='D1', alpha=2.0, radius=0.25):
         G[u][v]['flux'] = flux
     return G
 
-def plot_solution_with_circle(G, title, radius=0.25):
-    plt.figure(figsize=(10, 8))
-    node_pos = nx.get_node_attributes(G, 'pos')
-    node_phi = nx.get_node_attributes(G, 'phi')
-    x = [pos[0] for pos in node_pos.values()]
-    y = [pos[1] for pos in node_pos.values()]
-    phi = list(node_phi.values())
-    n = int(np.sqrt(G.number_of_nodes()))
-    X = np.reshape(x, (n, n))
-    Y = np.reshape(y, (n, n))
-    Z = np.reshape(phi, (n, n))
-    plt.contourf(X, Y, Z, 20, cmap='viridis')
-    plt.colorbar(label='Pressure')
-    plt.title(f'Pressure Field and Flux Vectors - {title}')
-    plt.xlabel('x')
-    plt.ylabel('y')
-    circle = plt.Circle((0.5, 0.5), radius, fill=False, color='r', linestyle='--')
-    plt.gca().add_patch(circle)
-    plt.tight_layout()
-    plt.show()
-
 def create_darcy_dataset(n=50, problem_type='D1', alphas=None):
     if alphas is None:
         alphas = [1.0] if problem_type == 'D1' else [1.0, 2.0, 4.0]
@@ -100,6 +79,3 @@ def create_darcy_dataset(n=50, problem_type='D1', alphas=None):
     
 
     return G
-
-# G = create_darcy_dataset(n=50, problem_type='D2', alphas=[2.0])
-# plot_solution_with_circle(G, title=f'Darcy Flow Solution (α=2.0)', radius=0.25)

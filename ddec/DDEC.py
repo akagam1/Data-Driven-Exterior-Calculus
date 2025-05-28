@@ -11,7 +11,6 @@ def get_faces(graph):
     ys = sorted({y for x, y in nodes})
     faces = []
 
-    # Detect quadrilateral faces
     for i in range(len(xs)-1):
         for j in range(len(ys)-1):
             # Define potential face vertices
@@ -79,7 +78,7 @@ def identify_face_bcs(G, problem_type='D1'):
         for u, v in face_edges:
             if (u[0] == 0 or v[0] == 0) and problem_type == 'D1':
                 boundary_faces.append(face_idx)
-                break  # Mark entire face as boundary
+                break
                 
     return boundary_faces
 
