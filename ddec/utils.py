@@ -4,6 +4,7 @@ import networkx as nx
 import generate_darcy_mod as darcy_mod
 import DDEC as ddec
 import torch
+import matplotlib.pyplot as plt
 
 def plot_solution(model_out, N, alpha, a):
     """Plot the solution"""
@@ -71,10 +72,10 @@ def dataset_generation(N, problem_type='D1',alpha=1.0):
         f_n = ddec.convert_cochain(f_n, N, degree=2)
 
         f = f_n.clone().detach().requires_grad_(True)
-        batches = [(f, phi_faces)]
+        batches = [(f, phi_faces,alpha)]
 
     if problem_type == 'D2':
-        for alph in [2,3,4]:
+        for alph in [1,2,4]:
             G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type, alphas=[alph])
             node_phi = nx.get_node_attributes(G, 'phi')
             phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
@@ -88,7 +89,7 @@ def dataset_generation(N, problem_type='D1',alpha=1.0):
             f_n = ddec.convert_cochain(f_n, N, degree=2)
 
             f = f_n.clone().detach().requires_grad_(True)
-            batches.append((f, phi_faces))
+            batches.append((f, phi_faces,alph))
     
     return batches, d0, d1
 
@@ -100,3 +101,25 @@ def make_u(N):
         else:
             u[i] = max(0, u[i])
     return u
+
+def plot_results(phi_faces,u_est, N, problem_type,alpha):
+    plt.figure(figsize=(10, 6))
+    plt.plot(phi_faces.detach().numpy(), label="phi_faces", linestyle='-', marker='o')
+    plt.plot(u_est.detach().numpy(), label="u_est", linestyle='--', marker='s')
+
+    # Labels and title
+    plt.xlabel("Index")
+    plt.ylabel("Value")
+    plt.title("Comparison of phi_faces and u_est")
+    plt.legend()
+    plt.grid()
+
+    plt.tight_layout()
+    if problem_type == 'D1':
+        plt.savefig(f'../results/N={N}_D1_results.png')
+    elif problem_type == 'D2':
+        plt.savefig(f'../results/N={N}_alpha={alpha}_D2_results.png')
+    plt.show()
+    print("Training completed successfully.")
+    print(f"Loss comparison plot saved in /results")
+    plt.show()

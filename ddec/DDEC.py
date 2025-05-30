@@ -4,6 +4,14 @@ import torch
 
 
 def get_faces(graph):
+    """Extract faces from a 2D grid graph with nodes as (x, y) tuples
+    Args:
+        graph (nx.Graph): A NetworkX graph representing a 2D grid with nodes as (x, y) tuples.
+
+    Returns:
+        list: A list of faces, where each face is represented as a list of edges in counter-clockwise order.
+    """
+
     nodes = list(graph.nodes())
     if not nodes or not all(isinstance(node, tuple) and len(node) == 2 for node in nodes):
         return []
@@ -36,7 +44,13 @@ def get_faces(graph):
     return faces
 
 def cobound_d1(graph):
-    """Create d1 coboundary operator (curl) with proper orientation handling"""
+    """Create d1 coboundary operator (curl) with proper orientation handling
+    Args:
+        graph (nx.Graph): A NetworkX graph representing a 2D grid with nodes as (x, y) tuples.
+    
+    Returns:
+        torch.Tensor: A 2D tensor representing the d1 coboundary operator.
+    """
     edges = list(graph.edges())
     edge_to_index = {tuple(sorted(edge)): i for i, edge in enumerate(edges)}
     faces = get_faces(graph)
@@ -66,11 +80,24 @@ def cobound_d1(graph):
 
 
 def cobound_d0(graph):
+    """Create d0 coboundary operator (divergence) for a 2D grid graph
+    Args:
+        graph (nx.Graph): A NetworkX graph representing a 2D grid with nodes as (x, y) tuples.
+    Returns:
+        torch.Tensor: A 2D tensor representing the d0 coboundary operator.
+    """
+
     b = nx.incidence_matrix(graph, oriented=True).toarray().T 
     return torch.tensor(b, dtype=torch.float64)
 
 def identify_face_bcs(G, problem_type='D1'):
-    """Identify boundary faces and their indices in f_n"""
+    """Identify boundary faces for a 2D grid graph
+    Args:
+        G (nx.Graph): A NetworkX graph representing a 2D grid with nodes as (x, y) tuples.
+        problem_type (str): Type of problem, either 'D1' or 'D2'.
+    Returns:
+        list: A list of indices of boundary faces.
+    """
     faces = get_faces(G)
 
     boundary_faces = []
@@ -83,7 +110,16 @@ def identify_face_bcs(G, problem_type='D1'):
     return boundary_faces
 
 def apply_face_bcs(f, boundary_faces, problem_type='D1', alpha=1.0):
-    """Apply BCs directly to face-based f_n vector"""
+    """Apply boundary conditions to the face cochain
+    Args:
+        f (torch.Tensor): The face cochain vector.
+        boundary_faces (list): List of indices of boundary faces.
+        problem_type (str): Type of problem, either 'D1' or 'D2'.
+        alpha (float): Value to set for the boundary conditions.
+    Returns:
+        torch.Tensor: The modified face cochain vector with boundary conditions applied.
+        list: List of tuples containing the index and value of each boundary condition.
+    """
     f_bc = f.clone()
     bcs = []
     for idx in boundary_faces:
@@ -92,11 +128,15 @@ def apply_face_bcs(f, boundary_faces, problem_type='D1', alpha=1.0):
     return f_bc, bcs
 
 def convert_cochain(phi,N, degree=2):
-    """Converts a 0-cochain to a 2-cochain
-        Need to generalize the functtonality eventually for 0-cochain to d-cochain
-        phi: 0-cochain vector flattened out column wise
-        constructing the 2-cochain colum wise too
- """
+    """Convert a cochain vector to face cochain vector based on the degree
+    Args:
+        phi (torch.Tensor): The cochain vector.
+        N (int): Size of the grid.
+        degree (int): Degree of the cochain, either 1 or 2.
+    Returns:
+        torch.Tensor: The face cochain vector.
+    """
+    
     if degree == 2:
         phi_faces = torch.zeros((N-1)*(N-1), dtype=torch.float64)
         for i in range(N-1):

@@ -20,11 +20,13 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
 
     u = make_u(N)
 
+
     with tqdm(total= epochs, desc="Training", unit="epoch") as pbar:
         for epoch in range(epochs):
             for X in batches:
-                f, phi_faces = X
+                f, phi_faces,alpha = X
                 model.phi_faces = phi_faces.clone().detach().requires_grad_(True)
+                model.f = f.clone().detach().requires_grad_(True)
                 optimizer.zero_grad()
                 with torch.enable_grad():
                     u_det = u.detach().requires_grad_(True)
@@ -45,21 +47,14 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
                 print(f"Converged at epoch {epoch} with loss {loss.item()}")
                 break
 
-    if (len(batches) > 1):
-        f,phi_faces = batches[2]
-    u_est = model.forward(u, f) 
+    for X in batches:
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(phi_faces.detach().numpy(), label="phi_faces", linestyle='-', marker='o')
-    plt.plot(u_est.detach().numpy(), label="u_est", linestyle='--', marker='s')
+        f, phi_faces, alpha = X
+        model.f = f.clone().detach().requires_grad_(True)
+        model.phi_faces = phi_faces.clone().detach().requires_grad_(True)
+        u_est = model.forward(u, f)
 
-    # Labels and title
-    plt.xlabel("Index")
-    plt.ylabel("Value")
-    plt.title("Comparison of phi_faces and u_est")
-    plt.legend()
-    plt.grid()
+        plot_results(phi_faces, u_est, N, problem_type,alpha)
 
-    # Show plot
-    plt.show()
+    return losses
     

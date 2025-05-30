@@ -23,11 +23,11 @@ class DDECModel(nn.Module):
             hidden_dim = 5 
             self.nn_model = nn.Sequential(
                 nn.Linear(1, hidden_dim),
-                nn.Tanh(),
+                nn.ReLU(),
                 nn.Linear(hidden_dim, hidden_dim),
-                nn.Tanh(),
+                nn.ReLU(),
                 nn.Linear(hidden_dim, hidden_dim),
-                nn.Tanh(),
+                nn.ReLU(),
                 nn.Linear(hidden_dim, 1)
             ).to(dtype=torch.float64)
             self._init_nn()
@@ -42,18 +42,27 @@ class DDECModel(nn.Module):
         self.D2_vals = nn.Parameter(torch.randn(self.d1.shape[0]))
     
     def _init_nn(self):
+        """
+        Initializes the neural network weights and biases using He initialization.
+        """
         for layer in self.nn_model:
             if isinstance(layer, nn.Linear):
                 if layer.out_features == self.out_dim:
                     init.zeros_(layer.weight)
                     init.zeros_(layer.bias)
                 else:
-                    init.kaiming_normal_(layer.weight, nonlinearity='tanh')
+                    init.kaiming_normal_(layer.weight, nonlinearity='relu')
                     if layer.bias is not None:
                         init.zeros_(layer.bias)
 
     
     def compute_hodge_laplacian(self):
+        """
+        Computes the Hodge Laplacian operator for the given d1 and d0 operators.
+        
+        Returns: 
+            torch.Tensor: The Hodge Laplacian operator K.  
+        """
         B1 = torch.diag(self.B1_vals**2 + 1e-5 * torch.ones_like(self.B1_vals)).to(dtype=torch.float64)
         B2 = torch.diag(self.B2_vals**2).to(dtype=torch.float64)  
         D1 = torch.diag(self.D1_vals**2 + 1e-5 * torch.ones_like(self.D1_vals)).to(dtype=torch.float64)
@@ -79,6 +88,19 @@ class DDECModel(nn.Module):
         return x.permute(*torch.arange(x.ndim - 1, -1, -1))
     
     def forward_problem(self, u, K, f):
+        """
+        Forward problem solver using Newton's method for the PDE
+        write google style doc with type hints and description
+        
+        Args:
+            u (torch.Tensor): Initial guess for the solution.
+            K (torch.Tensor): Hodge Laplacian operator.
+            f (torch.Tensor): Right-hand side vector of the PDE.
+        
+        Returns:
+            torch.Tensor: The solution to the PDE.
+        """
+
         def operator(u):
             grad_u = self.GRAD_s @ u
             nn_val = self.nn_model(grad_u.unsqueeze(-1)).squeeze(-1)
@@ -88,8 +110,7 @@ class DDECModel(nn.Module):
             return Ku - f
         
         u_n = u.clone().detach().requires_grad_(True)
-
-        #K_bc, f_bc = self.apply_bcs(K, f)      
+    
         u_n = torch.linalg.solve(K, f)
         for i in range(self.iter):
             if self.epsilon > 0:
@@ -121,6 +142,17 @@ class DDECModel(nn.Module):
         return u_n
 
     def adj_problem(self, u_new, J):
+        """
+        Adjoint problem solver to compute the adjoint variable lambda_adj.
+
+        Args:
+            u_new (torch.Tensor): The solution to the forward problem.
+            J (torch.Tensor): Jacobian matrix of the operator.
+        
+        Returns:
+            torch.Tensor: The adjoint variable lambda_adj.
+        """
+        
         lambda_adj = torch.linalg.solve(J.T, 2*(self.phi_faces - u_new))
         return lambda_adj
 
