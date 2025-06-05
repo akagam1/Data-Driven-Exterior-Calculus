@@ -31,11 +31,13 @@ The following are the results for the D1 problem of the paper over different dom
 
 ## Darcy problem D2 results
 
+
+<!-- 
 The following are the results for the D2 problem of the paper. The model was trained with a batch size of 3 for different boundary conditions ($\alpha \in \{1,2,4\}$).
 
 <img  src="results/N=6_alpha=1_D2_results.png">
 
 <img  src="results/N=6_alpha=2_D2_results.png">
 
-<img  src="results/N=6_alpha=4_D2_results.png">
+<img  src="results/N=6_alpha=4_D2_results.png"> -->
 

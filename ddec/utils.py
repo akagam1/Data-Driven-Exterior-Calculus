@@ -102,12 +102,11 @@ def make_u(N):
             u[i] = max(0, u[i])
     return u
 
-def plot_results(phi_faces,u_est, N, problem_type,alpha):
+def plot_results(phi_faces,u_est, N, problem_type,alpha,show_plot=False):
     plt.figure(figsize=(10, 6))
     plt.plot(phi_faces.detach().numpy(), label="phi_faces", linestyle='-', marker='o')
     plt.plot(u_est.detach().numpy(), label="u_est", linestyle='--', marker='s')
 
-    # Labels and title
     plt.xlabel("Index")
     plt.ylabel("Value")
     plt.title("Comparison of phi_faces and u_est")
@@ -119,7 +118,8 @@ def plot_results(phi_faces,u_est, N, problem_type,alpha):
         plt.savefig(f'../results/N={N}_D1_results.png')
     elif problem_type == 'D2':
         plt.savefig(f'../results/N={N}_alpha={alpha}_D2_results.png')
-    plt.show()
+    if show_plot:
+        plt.show()
     print("Training completed successfully.")
     print(f"Loss comparison plot saved in /results")
-    plt.show()
+    #plt.show()

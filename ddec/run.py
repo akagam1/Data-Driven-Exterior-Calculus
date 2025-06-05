@@ -14,6 +14,7 @@ parser.add_argument('--out_dim', type=int, default=0, help='Output dimension for
 parser.add_argument('--epochs', type=int, default=10000, help='Number of epochs for training (default: 10000)')
 parser.add_argument('--problem_type', type=str, choices=['D1', 'D2'], default='D1', help='Type of problem to solve (default: D1)')
 parser.add_argument('--lr', type=float, default=0.005, help='Learning rate for the optimizer (default: 0.005)')
+parser.add_argument('--show_plot', action='store_true', help='Show the solution plot after training')
 parser.add_argument('--loss-compare', action='store_true', help='Run loss comparison for different domain sizes')
 parser.add_argument('--verbose', action='store_true', help='Enable verbose output for debugging')
 args = parser.parse_args()
@@ -32,8 +33,10 @@ if args.verbose:
     print(f"problem_type: {args.problem_type}")   
     print(f"lr: {args.lr}")
     print(f"loss_compare: {args.loss_compare}")
+    print(f"show_plot: {args.show_plot}")
     print("=" * 50)
 
+#
 if not args.loss_compare:
     train_main(
             N=args.N,
@@ -45,7 +48,8 @@ if not args.loss_compare:
             out_dim=args.out_dim,
             epochs=args.epochs,
             problem_type=args.problem_type,
-            lr=args.lr
+            lr=args.lr,
+            show_plot=args.show_plot
         )
 else:
     losses =[]
@@ -62,12 +66,11 @@ else:
                 out_dim=args.out_dim,
                 epochs=args.epochs,
                 problem_type=args.problem_type,
-                lr=args.lr
+                lr=args.lr,
+                show_plot=args.show_plot
             )
             losses.append(loss)
         
-        #plot loss comparison
-        # 3 graphs for each N, iteration and loss
         plt.figure(figsize=(10, 6))
         for i, N in enumerate([3, 6, 8]):
             plt.plot(losses[i], label=f"N={N}", linestyle='-', marker='o')
@@ -93,22 +96,20 @@ else:
                 out_dim=args.out_dim,
                 epochs=args.epochs,
                 problem_type=args.problem_type,
-                lr=args.lr
+                lr=args.lr,
+                show_plot=args.show_plot
             )
         loss1=[]
         loss2=[]
         loss3=[]
 
-        for i in range(args.epochs * 3):
+        for i in range(int(args.epochs) * 3):
             if int(i/3) == 0:
                 loss1.append(loss[i])
             elif int(i/3) == 1:
                 loss2.append(loss[i])
             elif int(i/3) == 2:
                 loss3.append(loss[i])
-
-        #plot loss comparison
-        # 3 graphs for each alpha, iteration and loss
 
         plt.figure(figsize=(10, 6))
         plt.plot(loss1, label=f"alpha=1", linestyle='-', marker='o')
