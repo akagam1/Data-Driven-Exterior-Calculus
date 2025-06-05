@@ -8,7 +8,8 @@ from utils import *
 def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_type, lr,show_plot=False):
 
     batches, d0, d1 = dataset_generation(N, problem_type=problem_type)
-
+    d0 = d0.to(device='cuda' if torch.cuda.is_available() else 'cpu')
+    d1 = d1.to(device='cuda' if torch.cuda.is_available() else 'cpu')
     properties = {'d0': d0, 'd1': d1}
 
     model = DDECModel(iter, tol, epsilon, in_dim, out_dim, properties)
@@ -21,11 +22,18 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
 
     u = make_u(N)
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+    model = model.to(device)
+    u = u.to(device)
+
 
     with tqdm(total= epochs, desc="Training", unit="epoch", colour='green') as pbar:
         for epoch in range(epochs):
             for X in batches:
                 f, phi_faces,alpha = X
+                f = f.to(device)
+                phi_faces = phi_faces.to(device)
                 model.phi_faces = phi_faces.clone().detach().requires_grad_(True)
                 model.f = f.clone().detach().requires_grad_(True)
                 optimizer.zero_grad()

@@ -4,8 +4,12 @@ import torch.nn.init as init
 from torch.autograd.functional import jvp
 
 class DDECModel(nn.Module):
-    def __init__(self, iter, tol, epsilon, in_dim, out_dim, properties):
+    def __init__(self, iter, tol, epsilon, in_dim, out_dim, properties, device='cuda'):
         super(DDECModel, self).__init__()
+        self.device = device
+        if device == 'cuda' and not torch.cuda.is_available():
+            self.device = 'cpu'
+        
         self.iter = iter
         self.tol = tol
         self.epsilon = epsilon
@@ -66,18 +70,17 @@ class DDECModel(nn.Module):
         Returns: 
             torch.Tensor: The Hodge Laplacian operator K.  
         """
-        B1 = torch.diag(self.B1_vals**2 + 1e-5 * torch.ones_like(self.B1_vals)).to(dtype=torch.float64)
-        B2 = torch.diag(self.B2_vals**2).to(dtype=torch.float64)  
-        D1 = torch.diag(self.D1_vals**2 + 1e-5 * torch.ones_like(self.D1_vals)).to(dtype=torch.float64)
-        D2 = torch.diag(self.D2_vals**2).to(dtype=torch.float64) 
+        B1 = torch.diag(self.B1_vals**2 + 1e-5 * torch.ones_like(self.B1_vals)).to(dtype=torch.float64, device=self.device)
+        B2 = torch.diag(self.B2_vals**2).to(dtype=torch.float64, device=self.device)  
+        D1 = torch.diag(self.D1_vals**2 + 1e-5 * torch.ones_like(self.D1_vals)).to(dtype=torch.float64, device=self.device)
+        D2 = torch.diag(self.D2_vals**2).to(dtype=torch.float64, device=self.device) 
         B1_inv = torch.inverse(B1)
         D1_inv = torch.inverse(D1)
 
         self.DIV = B2 @ self.d1 @ B1_inv
         self.GRAD_s = D1_inv @ self.d1.T @ D2
         K = self.DIV@self.GRAD_s
-        K = K + 1e-6*torch.eye(K.shape[0]).to(dtype=torch.float64)
-
+        K = K + 1e-6*torch.eye(K.shape[0]).to(dtype=torch.float64, device=self.device) 
         return K
 
     def get_nn_contrib(self):
