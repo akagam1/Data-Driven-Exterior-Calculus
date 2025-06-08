@@ -105,26 +105,26 @@ class DDECModel(nn.Module):
     
     def cg_solver(self, matvec, rhs, tol=1e-6, max_iter=100):
         """
-        Conjugate Gradient solver for the linear system Ax = b.
-        
-        Args:
-            matvec (callable): Function to compute the matrix-vector product Ax.
-            rhs (torch.Tensor): Right-hand side vector b.
-            tol (float): Tolerance for convergence.
-            max_iter (int): Maximum number of iterations.
-        
-        Returns:
-            torch.Tensor: Solution vector x.
-        """
+        Conjugate Gradient solver for the linear system Ax = b,
+        where A is not formed explicitly, but matvec(v) computes A @ v.
 
+        Args:
+            matvec (callable): Function that returns A @ v for any vector v.
+            rhs (torch.Tensor): Right-hand side vector b.
+            tol (float): Convergence tolerance (L2 norm of residual).
+            max_iter (int): Maximum number of CG iterations.
+
+        Returns:
+            torch.Tensor: Approximate solution x to Ax = b.
+        """
         x = torch.zeros_like(rhs, dtype=torch.float64)
-        r = rhs.clone().detach().requires_grad_(True)
+        r = rhs.clone().detach()
         p = r.clone()
         rsold = torch.dot(r, r)
 
         for i in range(max_iter):
             Ap = matvec(p)
-            alpha = rsold / (torch.dot(p, Ap) + 1e-10)
+            alpha = rsold / (torch.dot(p, Ap) + 1e-10)  # add epsilon to avoid divide-by-zero
             x += alpha * p
             r = r - alpha * Ap
             rsnew = torch.dot(r, r)
@@ -150,17 +150,6 @@ class DDECModel(nn.Module):
         Returns:
             torch.Tensor: The solution to the PDE.
         """
-        def matvec(v):
-            """
-            Matrix-vector product for the operator function
-            Args:
-                v (torch.Tensor): Input vector.
-            Returns:
-                torch.Tensor: Result of the matrix-vector product.
-            """
-
-            jvp_resullt = jvp(operator, (u_n,), (v,), create_graph=True)[1]
-            return jvp_resullt
 
         def operator(u):
             grad_u = self.GRAD_s @ u
@@ -180,16 +169,29 @@ class DDECModel(nn.Module):
         u_n = torch.linalg.solve(K, f)
         for i in range(self.iter):
             if self.epsilon > 0:
+                def matvec(v):
+                    """
+                    Matrix-vector product for the operator function
+                    Args:
+                        v (torch.Tensor): Input vector.
+                    Returns:
+                        torch.Tensor: Result of the matrix-vector product.
+                    """
+
+                    v = v.detach().requires_grad_(True)
+                    op_out = operator(u_n)
+                    grad = torch.autograd.grad(op_out, u_n, grad_outputs=v, retain_graph=True, create_graph=True)[0]
+                    return grad
                 Ku = operator(u_n)
                 residual_vec = Ku - f
-                J = torch.autograd.functional.jacobian(operator, u_n)
-                #du = self.cg_solver(matvec, residual_vec, tol=1e-6)
+                #J = torch.autograd.functional.jacobian(operator, u_n)
+                du = self.cg_solver(matvec, residual_vec, tol=1e-6)
             
             else:
                 Ku = K @ u_n
                 residual_vec = Ku - f
                 J = K
-            du = torch.linalg.solve(J, residual_vec)
+                du = torch.linalg.solve(J, residual_vec)
             
             residual_norm = torch.linalg.norm(residual_vec, ord=2).item()
             if residual_norm < self.tol:
@@ -198,10 +200,10 @@ class DDECModel(nn.Module):
 
         if self.epsilon > 0:
             Ku = operator(u_n)
-            #J = torch.autograd.functional.jacobian(operator, u_n)
+            J = torch.autograd.functional.jacobian(operator, u_n)
         else:
             Ku = K @ u_n
-            #J = K
+            J = K
 
         self.lambda_adj = self.adj_problem(u_n, J)
         self.adj_loss = self._transpose(self.lambda_adj) @ (Ku - f)
