@@ -30,22 +30,31 @@ class DDECModel(nn.Module):
         temp = self.d1 @ self.d0
         if self.epsilon > 0:
             hidden_dim = 20
-            self.nn_modules = nn.ModuleList([
-                nn.Sequential(
-                nn.Linear(1, hidden_dim),
-                nn.ELU(),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.ELU(),
-                nn.Linear(hidden_dim, 1)).to(dtype=torch.float64) for _ in range(self.d1.shape[1])])
-            self._init_nn()
+            self._setup_neural_network(hidden_dim=hidden_dim)
 
-    
         self.device = self.d1.device
+        print(f"Using device: {self.device}")
 
         self.B1_vals = nn.Parameter(torch.randn(self.d1.shape[1]))
         self.B2_vals = nn.Parameter(torch.randn(self.d1.shape[0]))
         self.D1_vals = nn.Parameter(torch.randn(self.d1.shape[1]))
         self.D2_vals = nn.Parameter(torch.randn(self.d1.shape[0]))
+
+    def _setup_neural_network(self, hidden_dim=20):
+        """
+        Sets up the neural network modules for the DDEC model.
+        This method initializes the neural network layers and their parameters.
+        """
+        self.nn_modules = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(1, hidden_dim),
+                nn.ELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ELU(),
+                nn.Linear(hidden_dim, 1)
+            ).to(dtype=torch.float64, device=self.device) for _ in range(self.d1.shape[1])
+        ])
+        #self._init_nn()
     
     def _init_nn(self):
         """

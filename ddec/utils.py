@@ -55,7 +55,7 @@ def set_boundary_conditions(G, f, problem_type='D1', alpha=1.0):
             f[i] = 0
     return f
 
-def dataset_generation(N, problem_type='D1',alpha=1.0):
+def dataset_generation(device,N, problem_type='D1',alpha=1.0):
     batches = []
     if problem_type == 'D1':
         G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type)
@@ -71,7 +71,8 @@ def dataset_generation(N, problem_type='D1',alpha=1.0):
         f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alpha)
         f_n = ddec.convert_cochain(f_n, N, degree=2)
 
-        f = f_n.clone().detach().requires_grad_(True)
+        f = f_n.clone().detach().requires_grad_(True).to(device)
+        phi_faces = phi_faces.to(device)
         batches = [(f, phi_faces,alpha)]
 
     if problem_type == 'D2':
