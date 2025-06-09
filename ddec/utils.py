@@ -85,7 +85,7 @@ def dataset_generation(N, problem_type='D1',alpha=1.0):
             phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
 
             f = torch.zeros((N*N,), dtype=torch.float64)
-            f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alpha)
+            f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alph)
             f_n = ddec.convert_cochain(f_n, N, degree=2)
 
             f = f_n.clone().detach().requires_grad_(True)
