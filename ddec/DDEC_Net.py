@@ -3,6 +3,52 @@ import torch.nn as nn
 import torch.nn.init as init
 from torch.autograd.functional import jvp
 
+class PerturbNet(nn.Module):
+    def __init__(self, N, hidden_dim=20, device='cuda'):
+        super(PerturbNet, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.device = device
+        self.nn_modules = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(1, hidden_dim),
+                nn.ELU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ELU(),
+                nn.Linear(hidden_dim, 1)
+            ).to(dtype=torch.float64, device=self.device) for _ in range(N)
+        ])
+        #He initialization
+        self._init_nn()
+    
+    def _init_nn(self):
+        """
+        Initializes the neural network weights and biases using He initialization.
+        """
+        for model in self.nn_modules:
+            for layer in model:
+                if isinstance(layer, nn.Linear):
+                    init.kaiming_normal_(layer.weight, nonlinearity='relu')
+                    if layer.bias is not None:
+                        init.zeros_(layer.bias)
+    
+    def forward(self, x):
+        """
+        Forward pass of the neural network.
+        
+        Args:
+            x (torch.Tensor): Input tensor of shape (N, 1).
+        
+        Returns:
+            torch.Tensor: Output tensor of shape (N, 1).
+        """
+        outputs = []
+        #x is of shape (num_modules, 1)
+        for i, module in enumerate(self.nn_modules):
+            output = module(x[i].unsqueeze(0).unsqueeze(-1)).squeeze(-1)
+            outputs.append(output)
+        return torch.stack(outputs, dim=0).to(dtype=torch.float64, device=self.device)
+
+
 class DDECModel(nn.Module):
     def __init__(self, iter, tol, epsilon, in_dim, out_dim, properties, device='cuda'):
         super(DDECModel, self).__init__()
@@ -161,17 +207,27 @@ class DDECModel(nn.Module):
 
             jvp_resullt = jvp(operator, (u_n,), (v,), create_graph=True)[1]
             return jvp_resullt
-
-        def operator(u):
+        
+        def nn_operator(u):
             grad_u = self.GRAD_s @ u
-            #nn_val = self.nn_model(grad_u.unsqueeze(-1)).squeeze(-1)
-            nn_val = torch.stack([self.nn_modules[i](grad_u[i].unsqueeze(0)).squeeze(0) for i in range(grad_u.shape[0])])
+            nn_val = torch.stack([
+                self.nn_modules[i](grad_u[i].unsqueeze(0)).squeeze(0)
+                for i in range(grad_u.shape[0])
+            ])
             with torch.no_grad():
                 self.nn_contrib = nn_val.abs().mean().item()
+            return self.DIV @ nn_val
+
+        def operator(u):
+            #grad_u = self.GRAD_s @ u
+            #nn_val = self.nn_model(grad_u.unsqueeze(-1)).squeeze(-1)
+            # nn_val = torch.stack([self.nn_modules[i](grad_u[i].unsqueeze(0)).squeeze(0) for i in range(grad_u.shape[0])])
+            # with torch.no_grad():
+            #     self.nn_contrib = nn_val.abs().mean().item()
 
 
-            div_nn_val = self.DIV @ nn_val
-            Ku = K@u + self.epsilon * div_nn_val
+            # div_nn_val = self.DIV @ nn_val
+            Ku = K@u + self.epsilon * nn_operator(u)
 
             return Ku
         
@@ -182,7 +238,7 @@ class DDECModel(nn.Module):
             if self.epsilon > 0:
                 Ku = operator(u_n)
                 residual_vec = Ku - f
-                J = torch.autograd.functional.jacobian(operator, u_n)
+                J = K + self.epsilon * torch.autograd.functional.jacobian(nn_operator, u_n)
                 #du = self.cg_solver(matvec, residual_vec, tol=1e-6)
             
             else:
@@ -199,9 +255,10 @@ class DDECModel(nn.Module):
         if self.epsilon > 0:
             Ku = operator(u_n)
             #J = torch.autograd.functional.jacobian(operator, u_n)
+            J = K + self.epsilon * torch.autograd.functional.jacobian(nn_operator, u_n)
         else:
             Ku = K @ u_n
-            #J = K
+            J = K
 
         self.lambda_adj = self.adj_problem(u_n, J)
         self.adj_loss = self._transpose(self.lambda_adj) @ (Ku - f)
