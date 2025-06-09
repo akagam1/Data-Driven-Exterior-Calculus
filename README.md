@@ -31,13 +31,21 @@ The following are the results for the D1 problem of the paper over different dom
 
 ## Darcy problem D2 results
 
+The following are the results for the D2 problem of the paper. The model was trained with a batch size of 3 for different boundary conditions ($\alpha \in \{1,2,4\}$) for a grid size of 7x7.
 
-<!-- 
-The following are the results for the D2 problem of the paper. The model was trained with a batch size of 3 for different boundary conditions ($\alpha \in \{1,2,4\}$).
+<img  src="results/N=7_alpha=1_D2_results.png">
 
-<img  src="results/N=6_alpha=1_D2_results.png">
+<img  src="results/N=7_alpha=2_D2_results.png">
 
-<img  src="results/N=6_alpha=2_D2_results.png">
+<img  src="results/N=7_alpha=4_D2_results.png">
 
-<img  src="results/N=6_alpha=4_D2_results.png"> -->
+A modification was made to the non-linear strategy as compared to the original paper, which should scale better for larger problems. In the paper a non-linear perturbation is added into the differential equation representation itself, represented by a neural network. The equation is as follows:
+$$
+DIV.GRAD*.u_0 \; + \; \epsilon.DIV.\mathcal{NN}(GRAD*.u_0; \xi) = f_0
+$$
 
+This means that when training our model, since we are computing $u_0$ iteratively, we also need to compute the jacobian (and its inverse). This clearly doesn't scale well for larger problems. Instead we have introduced a non-linear perturbation to the estimated solution itself:
+
+$$
+u = \hat{u} + \epsilon.\mathcal{NN}(f; \xi)
+$$

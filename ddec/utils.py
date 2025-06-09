@@ -120,6 +120,5 @@ def plot_results(phi_faces,u_est, N, problem_type,alpha,show_plot=False):
         plt.savefig(f'../results/N={N}_alpha={alpha}_D2_results.png')
     if show_plot:
         plt.show()
-    print("Training completed successfully.")
     print(f"Loss comparison plot saved in /results")
     #plt.show()

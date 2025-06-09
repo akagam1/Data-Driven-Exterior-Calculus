@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 from DDEC_Net import DDECModel, PerturbNet
 import torch
 from tqdm import tqdm
@@ -30,15 +31,6 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
     u = u.to(device)
     perturb = perturb.to(device)
 
-    #print batches
-    for X in batches:
-        f, phi_faces, alpha = X
-        print(f)
-        print(phi_faces)
-        print(alpha)
-
-
-
     with tqdm(total= epochs, desc="Training", unit="epoch", colour='green') as pbar:
         for epoch in range(epochs):
             perturb_contribution = 0
@@ -65,17 +57,12 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
                 optimizer.zero_grad()
 
                 losses.append(loss.item())
-            val = perturb_contribution / len(batches)
 
             pbar.set_postfix({
-        "loss": f"{loss.item():.4f}",
-        "NN val ": f"{val:.4e}"
+        "loss": f"{loss.item():.8f}"
     })
             pbar.update(1)
 
-            # if (loss.item() < 1e-10):
-            #     print(f"Converged at epoch {epoch} with loss {loss.item()}")
-            #     brea
     print(f"Training completed after {epochs} epochs with final loss: {loss.item()}")
 
     for X in batches:
