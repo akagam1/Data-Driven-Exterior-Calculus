@@ -40,6 +40,7 @@ The following are the results for the D2 problem of the paper. The model was tra
 <img  src="results/N=7_alpha=4_D2_results.png">
 
 A modification was made to the non-linear strategy as compared to the original paper, which should scale better for larger problems. In the paper a non-linear perturbation is added into the differential equation representation itself, represented by a neural network. The equation is as follows:
+
 $$
 DIV.GRAD*.u_0 \; + \; \epsilon.DIV.\mathcal{NN}(GRAD*.u_0; \xi) = f_0
 $$
