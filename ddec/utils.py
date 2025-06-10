@@ -7,7 +7,6 @@ import torch
 import matplotlib.pyplot as plt
 
 def plot_solution(model_out, N, alpha, a):
-    """Plot the solution"""
     plt.figure(figsize=(10, 8))
 
     plt.title(f"Darcy Flow Solution (α={alpha}, a={a})")
@@ -91,6 +90,23 @@ def dataset_generation(N, problem_type='D1',alpha=1.0):
             f = f_n.clone().detach().requires_grad_(True)
             batches.append((f, phi_faces,alph))
     
+    if problem_type == 'test':
+        for alph in [3,2.5,5]:
+            G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type, alphas=[alph])
+            node_phi = nx.get_node_attributes(G, 'phi')
+            phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
+
+            d0 = ddec.cobound_d0(G)
+            d1 = ddec.cobound_d1(G)
+            phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
+
+            f = torch.zeros((N*N,), dtype=torch.float64)
+            f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alph)
+            f_n = ddec.convert_cochain(f_n, N, degree=2)
+
+            f = f_n.clone().detach().requires_grad_(True)
+            batches.append((f, phi_faces,alph))
+    
     return batches, d0, d1
 
 def make_u(N):
@@ -120,5 +136,5 @@ def plot_results(phi_faces,u_est, N, problem_type,alpha,show_plot=False):
         plt.savefig(f'../results/N={N}_alpha={alpha}_D2_results.png')
     if show_plot:
         plt.show()
-    print(f"Loss comparison plot saved in /results")
+    print(f"Output plot saved in /results")
     #plt.show()

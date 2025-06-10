@@ -9,18 +9,16 @@ from utils import *
 def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_type, lr,show_plot=False):
 
     batches, d0, d1 = dataset_generation(N, problem_type=problem_type)
-    d0 = d0.to(device='cuda' if torch.cuda.is_available() else 'cpu')
-    d1 = d1.to(device='cuda' if torch.cuda.is_available() else 'cpu')
-    properties = {'d0': d0, 'd1': d1}
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    d0 = d0.to(device=device)
+    d1 = d1.to(device=device)
+    properties = {'d0': d0, 'd1': d1}
 
-    model = DDECModel(iter, tol, 0, in_dim, out_dim, properties)
+    model = DDECModel(iter, tol, in_dim, out_dim, properties)
 
     perturb = PerturbNet((N-1)*(N-1), 20, device=device)
-    optimizer = torch.optim.Adam(list(model.parameters()) + list(perturb.parameters()), lr=lr)
-
+    optimizer = torch.optim.Adam(list(model.parameters())+list(perturb.parameters()), lr=lr)
     criterion = torch.nn.MSELoss()
-
     losses = []
     epochs = epochs
 
@@ -62,9 +60,12 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
         "loss": f"{loss.item():.8f}"
     })
             pbar.update(1)
-
+    print("")
+    print("="*50)
     print(f"Training completed after {epochs} epochs with final loss: {loss.item()}")
 
+    if problem_type == 'D2':
+        batches, d0, d1 = dataset_generation(N, problem_type="test")
     for X in batches:
 
         f, phi_faces, alpha = X
@@ -81,6 +82,4 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
         plot_results(phi_faces, u_est, N, problem_type,alpha,show_plot=show_plot)
     np.savez('../results/losses.npz', losses=losses)
 
-
-    return losses
-    
+    return losses  
