@@ -5,6 +5,38 @@ import torch
 from tqdm import tqdm
 from utils import *
 
+def plot_contour(arr1, arr2, title1='Array 1', title2='Array 2', cmap='viridis'):
+    """
+    Plot two 2D arrays as contour plots side by side.
+    
+    Args:
+        arr1 (np.ndarray or torch.Tensor): First 2D array.
+        arr2 (np.ndarray or torch.Tensor): Second 2D array.
+        title1 (str): Title for the first plot.
+        title2 (str): Title for the second plot.
+        cmap (str): Colormap to use (default 'viridis').
+    """
+    if hasattr(arr1, 'detach'):  # convert torch.Tensor to numpy if needed
+        arr1 = arr1.detach().cpu().numpy()
+    if hasattr(arr2, 'detach'):
+        arr2 = arr2.detach().cpu().numpy()
+        
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    for ax, arr, title in zip(axes, [arr1, arr2], [title1, title2]):
+        n, m = arr.shape
+        x = np.linspace(0, 1, m)
+        y = np.linspace(0, 1, n)
+        X, Y = np.meshgrid(x, y)
+        contour = ax.contourf(X, Y, arr, 20, cmap=cmap)
+        fig.colorbar(contour, ax=ax)
+        ax.set_title(title)
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_aspect('equal')
+    
+    plt.tight_layout()
+    plt.show()
 
 def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_type, lr,show_plot=False):
 
@@ -14,20 +46,25 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
     d1 = d1.to(device=device)
     properties = {'d0': d0, 'd1': d1}
 
-    model = DDECModel(iter, tol, in_dim, out_dim, properties)
+    model = DDECModel(iter, tol, in_dim, out_dim, properties, cochain=0)
 
-    perturb = PerturbNet((N-1)*(N-1), 20, device=device)
+    perturb = PerturbNet((N)*(N), 50, device=device)
     optimizer = torch.optim.Adam(list(model.parameters())+list(perturb.parameters()), lr=lr)
     criterion = torch.nn.MSELoss()
     losses = []
     epochs = epochs
 
-    u = make_u(N)
+    #u = make_u(N)
+    u = abs(torch.randn((N)*(N), dtype=torch.float64, requires_grad=True))
 
     print(f"Using device: {device}")
     model = model.to(device)
     u = u.to(device)
     perturb = perturb.to(device)
+
+    # with torch.no_grad():
+    #     for p in [model.B0_vals, model.B1_vals, model.B2_vals, model.D0_vals, model.D1_vals, model.D2_vals]:
+    #         p.clamp_(0, 1)
 
     with tqdm(total= epochs, desc="Training", unit="epoch", colour='green') as pbar:
         for epoch in range(epochs):
@@ -73,13 +110,17 @@ def train_main(N, alpha, iter, tol, epsilon, in_dim, out_dim, epochs, problem_ty
         phi_faces = phi_faces.to(device)
         model.f = f.clone().detach().requires_grad_(True)
         model.phi_faces = phi_faces.clone().detach().requires_grad_(True)
-        u_it = model.forward(u, f)
+        u_it = model.forward_eval(f)
         error = perturb.forward(f)
         u_est = u_it + epsilon * error.squeeze(-1).squeeze(-1)
+
+        phi_faces = phi_faces.view(N,N).t()
+        u_est = u_est.view(N,N).t()
         phi_faces = phi_faces.cpu()
         u_est = u_est.cpu()
 
-        plot_results(phi_faces, u_est, N, problem_type,alpha,show_plot=show_plot)
+        #plot_results(phi_faces, u_est, N, problem_type,alpha,show_plot=show_plot)
+        plot_contour(u_est, phi_faces)
     np.savez('../results/losses.npz', losses=losses)
 
     return losses  

@@ -4,7 +4,7 @@ import torch.nn.init as init
 from torch.autograd.functional import jvp
 
 class PerturbNet(nn.Module):
-    def __init__(self, N, hidden_dim=20, device='cuda'):
+    def __init__(self, N, hidden_dim=5, device='cuda'):
         super(PerturbNet, self).__init__()
         self.hidden_dim = hidden_dim
         self.device = device
@@ -50,12 +50,12 @@ class PerturbNet(nn.Module):
 
 
 class DDECModel(nn.Module):
-    def __init__(self, iter, tol, in_dim, out_dim, properties, device='cuda'):
+    def __init__(self, iter, tol, in_dim, out_dim, properties, cochain=2, device='cuda'):
         super(DDECModel, self).__init__()
         self.device = device
         if device == 'cuda' and not torch.cuda.is_available():
             self.device = 'cpu'
-        
+        self.cochain = cochain
         self.iter = iter
         self.tol = tol
         self.in_dim = in_dim
@@ -73,9 +73,10 @@ class DDECModel(nn.Module):
         self.nn_contrib = 0
     
         self.device = self.d1.device
-
+        self.B0_vals = nn.Parameter(torch.randn(self.d0.shape[1]))
         self.B1_vals = nn.Parameter(torch.randn(self.d1.shape[1]))
         self.B2_vals = nn.Parameter(torch.randn(self.d1.shape[0]))
+        self.D0_vals = nn.Parameter(torch.randn(self.d0.shape[1]))
         self.D1_vals = nn.Parameter(torch.randn(self.d1.shape[1]))
         self.D2_vals = nn.Parameter(torch.randn(self.d1.shape[0]))
 
@@ -87,17 +88,27 @@ class DDECModel(nn.Module):
         Returns: 
             torch.Tensor: The Hodge Laplacian operator K.  
         """
+        B0 = torch.diag(self.B0_vals**2 + 1e-5 * torch.ones_like(self.B0_vals)).to(dtype=torch.float64, device=self.device)
         B1 = torch.diag(self.B1_vals**2 + 1e-5 * torch.ones_like(self.B1_vals)).to(dtype=torch.float64, device=self.device)
         B2 = torch.diag(self.B2_vals**2).to(dtype=torch.float64, device=self.device)  
+        D0 = torch.diag(self.D0_vals**2 + 1e-5 * torch.ones_like(self.D0_vals)).to(dtype=torch.float64, device=self.device)
         D1 = torch.diag(self.D1_vals**2 + 1e-5 * torch.ones_like(self.D1_vals)).to(dtype=torch.float64, device=self.device)
         D2 = torch.diag(self.D2_vals**2).to(dtype=torch.float64, device=self.device) 
+        B0_inv = torch.inverse(B0)
         B1_inv = torch.inverse(B1)
+        D0_inv = torch.inverse(D0)
         D1_inv = torch.inverse(D1)
 
-        self.DIV = B2 @ self.d1 @ B1_inv
-        self.GRAD_s = D1_inv @ self.d1.T @ D2
-        K = self.DIV@self.GRAD_s
-        K = K + 1e-6*torch.eye(K.shape[0]).to(dtype=torch.float64, device=self.device) 
+        if self.cochain == 2:
+            self.DIV = B2 @ self.d1 @ B1_inv
+            self.GRAD_s = D1_inv @ self.d1.T @ D2
+            K = self.DIV@self.GRAD_s
+            K = K + 1e-6*torch.eye(K.shape[0]).to(dtype=torch.float64, device=self.device)
+        if self.cochain == 0:
+            CURL = B1 @ self.d0 @ B0_inv
+            CURL_s = D0_inv @ self.d0.T @ D1
+            K = CURL_s @CURL
+            K = K + 5*torch.eye(K.shape[0]).to(dtype=torch.float64, device=self.device)
         return K
 
 
@@ -161,4 +172,11 @@ class DDECModel(nn.Module):
 
         lambda_adj = torch.linalg.solve(J.T, 2*(self.phi_faces - u_new))
         return lambda_adj
+    
+    def forward_eval(self,f):
+        """
+        Forward pass for evaluation (not iterative)
+        """
+        K = self.compute_hodge_laplacian()
+        return torch.linalg.solve(K,f)
 

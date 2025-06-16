@@ -77,18 +77,20 @@ def dataset_generation(N, problem_type='D1',alpha=1.0):
         for alph in [1,2,4]:
             G = darcy_mod.create_darcy_dataset(n=N, problem_type=problem_type, alphas=[alph])
             node_phi = nx.get_node_attributes(G, 'phi')
-            phi = torch.tensor(list(node_phi.values()), dtype=torch.float64)
+            phi = torch.tensor(list(node_phi.values()), dtype=torch.float64).requires_grad_(True)
+            print(f"phi shape: {phi.shape}")
 
             d0 = ddec.cobound_d0(G)
             d1 = ddec.cobound_d1(G)
-            phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
+            #phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
 
             f = torch.zeros((N*N,), dtype=torch.float64)
             f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alph)
-            f_n = ddec.convert_cochain(f_n, N, degree=2)
+            #f_n = ddec.convert_cochain(f_n, N, degree=2)
 
             f = f_n.clone().detach().requires_grad_(True)
-            batches.append((f, phi_faces,alph))
+            #batches.append((f, phi_faces,alph))
+            batches.append((f,phi,alph))
     
     if problem_type == 'test':
         for alph in [3,2.5,5]:
@@ -98,19 +100,20 @@ def dataset_generation(N, problem_type='D1',alpha=1.0):
 
             d0 = ddec.cobound_d0(G)
             d1 = ddec.cobound_d1(G)
-            phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
+            #phi_faces = ddec.convert_cochain(phi, N, degree=2).clone().detach().requires_grad_(True)
 
             f = torch.zeros((N*N,), dtype=torch.float64)
             f_n = set_boundary_conditions(G, f, problem_type=problem_type, alpha=alph)
-            f_n = ddec.convert_cochain(f_n, N, degree=2)
+            #f_n = ddec.convert_cochain(f_n, N, degree=2)
 
             f = f_n.clone().detach().requires_grad_(True)
-            batches.append((f, phi_faces,alph))
+            #batches.append((f, phi_faces,alph))
+            batches.append((f,phi,alph))
     
     return batches, d0, d1
 
 def make_u(N):
-    u = abs(torch.randn((N-1)*(N-1), dtype=torch.float64, requires_grad=True))
+    u = abs(torch.randn((N)*(N), dtype=torch.float64, requires_grad=True))
     for i in range(u.shape[0]):
         if (u[i] >= 0):
             u[i] = min(0.75, u[i])
